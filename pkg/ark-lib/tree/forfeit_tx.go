@@ -1,10 +1,31 @@
 package tree
 
 import (
+	"github.com/arkade-os/arkd/pkg/ark-lib/script"
 	"github.com/arkade-os/arkd/pkg/ark-lib/txutils"
 	"github.com/btcsuite/btcd/psbt/v2"
 	"github.com/btcsuite/btcd/wire/v2"
 )
+
+// BuildForfeitTxWithOpReturn is BuildForfeitTx with an optional 32-byte payload carried in a
+// 0-value OP_RETURN first output, e.g. a client-side commitment that moves state from the
+// forfeited VTXO to its replacement. Without a payload it is BuildForfeitTx.
+func BuildForfeitTxWithOpReturn(
+	inputs []*wire.OutPoint, sequences []uint32, prevouts []*wire.TxOut,
+	signerScript []byte, txLocktime uint32, opReturn []byte,
+) (*psbt.Packet, error) {
+	ptx, err := BuildForfeitTx(inputs, sequences, prevouts, signerScript, txLocktime)
+	if err != nil || opReturn == nil {
+		return ptx, err
+	}
+	opret, err := script.DataOpReturn(opReturn)
+	if err != nil {
+		return nil, err
+	}
+	ptx.UnsignedTx.TxOut = append([]*wire.TxOut{opret}, ptx.UnsignedTx.TxOut...)
+	ptx.Outputs = append([]psbt.POutput{{}}, ptx.Outputs...)
+	return ptx, nil
+}
 
 func BuildForfeitTx(
 	inputs []*wire.OutPoint, sequences []uint32, prevouts []*wire.TxOut,

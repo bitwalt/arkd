@@ -484,12 +484,19 @@ func (b *txBuilder) VerifyForfeitTxs(
 			prevouts = []*wire.TxOut{connectorOutput, vtxoPrevout}
 		}
 
-		rebuilt, err := tree.BuildForfeitTx(
+		// the optional data OP_RETURN is part of the deterministic rebuild
+		forfeitOpReturn, err := script.ExtractDataOpReturn(tx.UnsignedTx)
+		if err != nil {
+			return nil, err
+		}
+
+		rebuilt, err := tree.BuildForfeitTxWithOpReturn(
 			inputs,
 			sequences,
 			prevouts,
 			forfeitScript,
 			uint32(txLocktime),
+			forfeitOpReturn,
 		)
 		if err != nil {
 			return nil, err

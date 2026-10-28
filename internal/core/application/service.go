@@ -4952,6 +4952,12 @@ func validateOffchainTxOutputs(
 
 		// handle non-extension OP_RETURN outputs
 		if len(out.PkScript) > 0 && out.PkScript[0] == txscript.OP_RETURN {
+			// 0-value OP_RETURN = data output (e.g. RGB opret commitment),
+			// never a (sub-dust) VTXO; it still counts towards maxOpReturnOutputs.
+			if script.IsDataOpReturn(out.Value, out.PkScript) {
+				outputs = append(outputs, out)
+				continue
+			}
 			// subdust OP_RETURN: must have value < dust
 			if script.IsSubDustScript(out.PkScript) {
 				if out.Value >= int64(dust) {

@@ -117,6 +117,12 @@ func SubDustScript(taprootKey *btcec.PublicKey) ([]byte, error) {
 		Script()
 }
 
+// IsDataOpReturn reports whether an output is a 0-value OP_RETURN data output.
+// It is never a VTXO: a sub-dust VTXO carries at least vtxoMinAmount (> 0).
+func IsDataOpReturn(value int64, script []byte) bool {
+	return value == 0 && len(script) > 0 && script[0] == txscript.OP_RETURN
+}
+
 // DataOpReturnSize is the size of the optional payload of a checkpoint or forfeit tx.
 const DataOpReturnSize = 32
 

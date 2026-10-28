@@ -134,6 +134,10 @@ func decodeTx(offchainTx domain.OffchainTx) (string, []domain.Outpoint, []domain
 			extension.IsExtension(out.PkScript) {
 			continue
 		}
+		// 0-value OP_RETURN data outputs are not VTXOs
+		if script.IsDataOpReturn(out.Value, out.PkScript) {
+			continue
+		}
 		if len(out.PkScript) < 2 {
 			return "", nil, nil, fmt.Errorf(
 				"invalid output script at index %d: script too short (%d bytes)",

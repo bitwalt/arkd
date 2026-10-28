@@ -693,6 +693,11 @@ func (s *service) updateProjectionsAfterOffchainTxEvents(events []domain.Event) 
 					continue
 				}
 
+				// 0-value OP_RETURN data outputs are not VTXOs
+				if script.IsDataOpReturn(int64(out.Amount), out.PkScript) {
+					continue
+				}
+
 				// at that point, we should only have valid taproot script
 				if len(out.PkScript) != 34 {
 					continue

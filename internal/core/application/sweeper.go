@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/arkade-os/arkd/pkg/ark-lib/offchain"
 	"strings"
 	"sync"
 	"time"
@@ -219,7 +220,7 @@ func (s *sweeper) scheduleCheckpointSweep(
 	vtxo domain.Outpoint, checkpointTx *psbt.Packet, blockTimestamp *ports.BlockTimestamp,
 ) error {
 	checkpointTxid := checkpointTx.UnsignedTx.TxHash()
-	checkpointVOut := uint32(0)
+	checkpointVOut := offchain.CheckpointOutputIndex(checkpointTx.UnsignedTx)
 
 	if len(checkpointTx.Outputs) <= int(checkpointVOut) {
 		return fmt.Errorf("no outputs found in checkpoint tx")
@@ -310,7 +311,7 @@ func (s *sweeper) scheduleCheckpointSweep(
 			Txid:   checkpointTxid.String(),
 			Index:  checkpointVOut,
 			Script: hex.EncodeToString(prevoutScript),
-			Value:  uint64(checkpointTx.UnsignedTx.TxOut[0].Value),
+			Value:  uint64(checkpointTx.UnsignedTx.TxOut[checkpointVOut].Value),
 			TapscriptLeaf: &ports.Tapscript{
 				InternalKey:  hex.EncodeToString(internalKey.SerializeCompressed()),
 				ControlBlock: hex.EncodeToString(sweepMerkleProof.ControlBlock),

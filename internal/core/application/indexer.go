@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/arkade-os/arkd/pkg/ark-lib/offchain"
 	"math"
 	"slices"
 	"sort"
@@ -712,7 +713,9 @@ func (i *indexerService) walkVtxoChain(
 						Spends:    []string{ptx.UnsignedTx.TxIn[0].PreviousOutPoint.String()},
 					})
 
-					allOutpoints = append(allOutpoints, Outpoint{Txid: txid, VOut: 0})
+					allOutpoints = append(allOutpoints, Outpoint{
+						Txid: txid, VOut: offchain.CheckpointOutputIndex(ptx.UnsignedTx),
+					})
 					chainTx.Spends = append(chainTx.Spends, txid)
 
 					// populate newNextVtxos with checkpoints inputs

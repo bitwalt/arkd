@@ -25,6 +25,20 @@ type VtxoInput struct {
 	// RevealedTapscripts is the whole taproot tree of the vtxo
 	// it must be revealed to the ark operator in order to verify the spent paths are valid
 	RevealedTapscripts []string
+	// CheckpointOpReturn is an optional 32-byte payload the checkpoint tx carries in a 0-value
+	// OP_RETURN, so that it commits to data chosen by the VTXO owner (e.g. an RGB commitment).
+	// The OP_RETURN is the first output: client-side validation protocols look for it before
+	// any taproot output. The checkpoint output then moves to vout 1.
+	CheckpointOpReturn []byte
+}
+
+// CheckpointOutputIndex returns the vout of the checkpoint output of a checkpoint tx.
+func CheckpointOutputIndex(tx *wire.MsgTx) uint32 {
+	if len(tx.TxOut) > 1 && len(tx.TxOut[0].PkScript) > 0 &&
+		tx.TxOut[0].PkScript[0] == txscript.OP_RETURN {
+		return 1
+	}
+	return 0
 }
 
 // BuildTxs builds the ark and checkpoint txs for the given inputs and outputs.
@@ -190,10 +204,17 @@ func buildCheckpointTx(
 		return nil, nil, err
 	}
 
+	checkpointOuts := []*wire.TxOut{{Value: vtxo.Amount, PkScript: checkpointPkScript}}
+	if vtxo.CheckpointOpReturn != nil {
+		opret, err := script.DataOpReturn(vtxo.CheckpointOpReturn)
+		if err != nil {
+			return nil, nil, err
+		}
+		checkpointOuts = append([]*wire.TxOut{opret}, checkpointOuts...)
+	}
+
 	// build the checkpoint virtual tx
-	checkpointPtx, err := buildArkTx(
-		[]VtxoInput{vtxo}, []*wire.TxOut{{Value: vtxo.Amount, PkScript: checkpointPkScript}},
-	)
+	checkpointPtx, err := buildArkTx([]VtxoInput{vtxo}, checkpointOuts)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -221,7 +242,7 @@ func buildCheckpointTx(
 	checkpointInput := &VtxoInput{
 		Outpoint: &wire.OutPoint{
 			Hash:  checkpointPtx.UnsignedTx.TxHash(),
-			Index: 0,
+			Index: CheckpointOutputIndex(checkpointPtx.UnsignedTx),
 		},
 		Amount: vtxo.Amount,
 		Tapscript: &waddrmgr.Tapscript{

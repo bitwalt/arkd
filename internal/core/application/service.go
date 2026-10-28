@@ -365,7 +365,8 @@ func (s *service) registerEventHandlers() {
 				checkpointTxsByOutpoint[ptx.UnsignedTx.TxIn[0].PreviousOutPoint.String()] = TxData{
 					Tx: tx, Txid: txid,
 				}
-				script := hex.EncodeToString(ptx.UnsignedTx.TxOut[0].PkScript)
+				cpVout := offchain.CheckpointOutputIndex(ptx.UnsignedTx)
+				script := hex.EncodeToString(ptx.UnsignedTx.TxOut[cpVout].PkScript)
 				checkpointScripts = append(
 					checkpointScripts,
 					script,
@@ -957,11 +958,21 @@ func (s *service) SubmitOffchainTx(
 			})
 		}
 
+		// optional user OP_RETURN in the checkpoint tx; the deterministic
+		// rebuild below reproduces it, so any other modification still fails the txid check.
+		checkpointOpReturn, err := script.ExtractDataOpReturn(checkpointPsbt.UnsignedTx)
+		if err != nil {
+			return nil, errors.CHECKPOINT_MISMATCH.New(
+				"invalid checkpoint tx %s: %s", checkpointTxid, err,
+			).WithMetadata(errors.CheckpointMismatchMetadata{ExpectedTxid: txid})
+		}
+
 		ins = append(ins, offchain.VtxoInput{
 			Outpoint:           &checkpointPsbt.UnsignedTx.TxIn[0].PreviousOutPoint,
 			Tapscript:          tapscript,
 			RevealedTapscripts: taptree,
 			Amount:             int64(vtxo.Amount),
+			CheckpointOpReturn: checkpointOpReturn,
 		})
 	}
 
@@ -1392,7 +1403,8 @@ func (s *service) FinalizeOffchainTx(
 			return errors.INVALID_PSBT_INPUT.New("checkpoint tx has no outputs").
 				WithMetadata(errors.InputMetadata{Txid: txid, InputIndex: inIndex})
 		}
-		checkpointOutputScript := checkpointTx.UnsignedTx.TxOut[0].PkScript
+		cpVout := offchain.CheckpointOutputIndex(checkpointTx.UnsignedTx)
+		checkpointOutputScript := checkpointTx.UnsignedTx.TxOut[cpVout].PkScript
 		if !bytes.Equal(checkpointOutputScript, expectedOutputScript) {
 			return errors.INVALID_PSBT_INPUT.New(
 				"invalid output script: got %x expected %x",
@@ -1408,7 +1420,7 @@ func (s *service) FinalizeOffchainTx(
 
 		// save the encoded taproot tree in the checkpoint tx output
 		// it will be used to compute the sweep leaf in the sweeper
-		checkpointTx.Outputs[0].TaprootTapTree = encodedTapTree
+		checkpointTx.Outputs[cpVout].TaprootTapTree = encodedTapTree
 
 		var b64checkpointTx string
 		b64checkpointTx, err = checkpointTx.B64Encode()
@@ -4075,7 +4087,8 @@ func checkpointOutputScripts(txs []domain.Tx) []string {
 		if err != nil || len(ptx.UnsignedTx.TxOut) == 0 {
 			continue
 		}
-		scripts = append(scripts, hex.EncodeToString(ptx.UnsignedTx.TxOut[0].PkScript))
+		cpVout := offchain.CheckpointOutputIndex(ptx.UnsignedTx)
+		scripts = append(scripts, hex.EncodeToString(ptx.UnsignedTx.TxOut[cpVout].PkScript))
 	}
 	return scripts
 }

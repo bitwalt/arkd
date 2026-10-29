@@ -117,6 +117,43 @@ func SubDustScript(taprootKey *btcec.PublicKey) ([]byte, error) {
 		Script()
 }
 
+// DataOpReturnSize is the size of the optional payload of a checkpoint or forfeit tx.
+const DataOpReturnSize = 32
+
+// DataOpReturn is the 0-value `OP_RETURN <32 bytes>` output carrying payload.
+func DataOpReturn(payload []byte) (*wire.TxOut, error) {
+	if len(payload) != DataOpReturnSize {
+		return nil, fmt.Errorf(
+			"data OP_RETURN payload must be %d bytes, got %d", DataOpReturnSize, len(payload),
+		)
+	}
+	pkScript, err := txscript.NullDataScript(payload)
+	if err != nil {
+		return nil, err
+	}
+	return &wire.TxOut{Value: 0, PkScript: pkScript}, nil
+}
+
+// ExtractDataOpReturn returns the payload of the optional data OP_RETURN of a checkpoint or
+// forfeit tx (nil if there is none). Any other OP_RETURN, or more than one, is an error.
+func ExtractDataOpReturn(tx *wire.MsgTx) ([]byte, error) {
+	var payload []byte
+	for i, out := range tx.TxOut {
+		if len(out.PkScript) == 0 || out.PkScript[0] != txscript.OP_RETURN {
+			continue
+		}
+		if payload != nil {
+			return nil, fmt.Errorf("more than one OP_RETURN output")
+		}
+		if out.Value != 0 || len(out.PkScript) != 2+DataOpReturnSize ||
+			out.PkScript[1] != txscript.OP_DATA_32 {
+			return nil, fmt.Errorf("invalid OP_RETURN output #%d", i)
+		}
+		payload = out.PkScript[2:]
+	}
+	return payload, nil
+}
+
 func IsSubDustScript(script []byte) bool {
 	tokenizer := txscript.MakeScriptTokenizer(0, script)
 	if !tokenizer.Next() || tokenizer.Opcode() != txscript.OP_RETURN {
